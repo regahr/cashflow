@@ -35,6 +35,17 @@ On Sunday night, any money left pays off the floating debt first. The rest carri
 
 Bills tagged `#bill` (electricity, school, rent) are stored, but they never count against the daily budget. They show up as a monthly total.
 
+## Other ways to use it
+
+We use it as a couple, but nothing in it is about couples. It is a daily budget with a weekday amount, a weekend amount and a Slack thread. Some setups that work today, with only the changes listed in [Make it yours](#make-it-yours):
+
+- Just you. Put one name in `CASHFLOW_USER_NAMES`. Everything else works the same.
+- A family. Add everyone who spends from the same pot. Each reply says who logged it.
+- Housemates with a shared kitchen fund. Set the daily amounts to your grocery money. Log rent and utilities with `#bill`, so they show up but do not eat the daily number.
+- A trip with friends. Set the weekday and weekend amounts to the same daily figure. Each day gets its own thread, and the CSV on Monday says who paid for what, so you can settle up. The bot does not split costs between people. You do that from the CSV.
+- Pocket money for a teenager. They log, you see the same thread. A refund (`-20rb`) or a correction (edit the message) is part of the deal.
+- Office snacks or petty cash. Set the weekend amount to 0. Overspend still moves to the weekdays left, but a Friday overspend has nowhere to go, so it becomes floating debt, unless money saved earlier that week covers it.
+
 ## How it is built
 
 - One Supabase Edge Function (Deno, TypeScript) receives Slack events and the `/spent` command.
@@ -117,6 +128,39 @@ npm test
 ```
 
 Needs Node 22.18 or newer (we use 24). No install step: there are no npm dependencies.
+
+## Contributing
+
+This started as a thing for our home, so it is small on purpose. Changes that keep it small are the easiest to merge.
+
+To work on it:
+
+```
+git clone https://github.com/regahr/cashflow
+cd cashflow
+npm test
+cd supabase/functions/slack && deno check --config deno.json index.ts
+```
+
+Where things are:
+
+- [`engine.ts`](supabase/functions/_shared/engine.ts) has the budget rules. It is plain functions with no I/O, so it is easy to test.
+- [`parse.ts`](supabase/functions/_shared/parse.ts) turns "25k makan 5k parkir" into an amount and a note.
+- [`format.ts`](supabase/functions/_shared/format.ts) writes the replies.
+- [`slack/index.ts`](supabase/functions/slack/index.ts) handles Slack, the database and the cron jobs.
+
+If you change a rule, add a case to `test/engine.test.ts` that shows the new behaviour. The test with 500 random weeks has to keep passing: it is the check that the money adds up.
+
+For anything bigger, please open an issue first, so we can talk about it before you spend the time. Ideas we would like help with:
+
+- Other currencies and other money words, for example "5k" in dollars or "1,2 Mio".
+- Budget amounts and the timezone from secrets, so nobody has to edit code.
+- A budget for each person on top of the shared one.
+- A monthly summary by note, from `/spent month`.
+
+One thing we will keep: no LLM in the money math. The same messages should always give the same numbers.
+
+Then fork, make a branch, check that `npm test` passes, and open a pull request that says what changed and why.
 
 ## License
 
