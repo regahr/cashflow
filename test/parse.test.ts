@@ -64,3 +64,27 @@ test("rupiah formats with dots", () => {
   assert.equal(rupiah(0), "0");
   assert.equal(rupiah(-20_000), "-20.000");
 });
+
+test("in a day thread the amount can be anywhere, if it is clearly an amount", () => {
+  const p = parseSpend("beli kue2 20rb", { anywhere: true });
+  assert.equal(p.kind, "spend");
+  if (p.kind !== "spend") return;
+  assert.equal(p.amount, 20_000);
+  assert.equal(p.note, "beli kue2");
+  assert.equal(p.needsConfirm, false);
+  const q = parseSpend("makan 25k parkir 5k", { anywhere: true });
+  assert.equal(q.kind === "spend" && q.amount, 30_000);
+  const r = parseSpend("bayar listrik 1.500.000 #bill", { anywhere: true });
+  assert.equal(r.kind === "spend" && r.amount, 1_500_000);
+  assert.equal(r.kind === "spend" && r.bill, true);
+});
+
+test("anywhere mode still ignores lines with no clear amount", () => {
+  for (const t of ["beli kue2", "beli 2 bakso", "ok sayang", "jam 5 ya"]) {
+    assert.equal(parseSpend(t, { anywhere: true }).kind, "ignore", t);
+  }
+});
+
+test("at the top level the amount must still come first", () => {
+  assert.equal(parseSpend("beli kue2 20rb").kind, "ignore");
+});

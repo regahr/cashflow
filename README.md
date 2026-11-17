@@ -2,11 +2,11 @@
 
 A Slack bot for a shared household budget. Reply "50rb bakso" in today's thread, and it tells you what is left.
 
-No app, no AI, no server. One Supabase function, about 800 lines of TypeScript, and it runs on the free tier.
+No app, no AI, no server. One Supabase function, about 850 lines of TypeScript, and it runs on the free tier.
 
-<img src="docs/thread.png" alt="A day thread in Slack: two spends, an overspend and a bill, each with the bot's reply" width="560">
+<img src="docs/demo.gif" alt="A day thread in Slack: spends are typed in, and the bot answers each one with what is left" width="560">
 
-The amounts in this README, the picture and the example reports are made up. Set your own; see [Make it yours](#make-it-yours).
+The names and amounts in this README, the animation and the example reports are made up. Set your own; see [Make it yours](#make-it-yours).
 
 ## How logging works
 
@@ -15,6 +15,7 @@ Every night at 00:05 the bot opens a thread for the new day. Everyone replies in
 ```
 50rb bakso                 50.000
 25k makan 5k parkir        30.000, both amounts add up
+jajan 20rb                 20.000, in a day thread the amount can come last
 1,5jt listrik #bill        1.500.000, kept outside the daily budget
 kemarin 40rb bensin        logged on yesterday
 -20rb refund               takes 20.000 off
@@ -70,9 +71,9 @@ There is an example of all four files, made from a made-up week of chat messages
 - Postgres keeps one row per entry. Nothing else is stored: every number is replayed from those rows each time, so fixing an entry from three days ago just works.
 - pg_cron calls the same function at 00:05 and 20:00.
 - Slack is called with plain `fetch`. The only package is `supabase-js`.
-- 45 unit tests, including 500 random weeks that check the money always adds up: what is left at the end equals the week's budget plus carry-over minus what was spent.
+- 49 unit tests, including 500 random weeks that check the money always adds up: what is left at the end equals the week's budget plus carry-over minus what was spent.
 
-The budget logic is in [`engine.ts`](supabase/functions/_shared/engine.ts) (about 200 lines) and the input parsing is in [`parse.ts`](supabase/functions/_shared/parse.ts) (about 80).
+The budget logic is in [`engine.ts`](supabase/functions/_shared/engine.ts) (about 200 lines) and the input parsing is in [`parse.ts`](supabase/functions/_shared/parse.ts) (about 100).
 
 ## What it does not do
 
@@ -132,8 +133,8 @@ You need the Supabase CLI and a Slack workspace where you can add apps. It takes
 | Who is who, the channel, the first Monday | The other secrets in step 5. No code change. |
 | Timezone | `WIB_OFFSET_MS` in [`dates.ts`](supabase/functions/_shared/dates.ts#L3) (UTC+7 now). Change the cron times too, below. |
 | When the day thread opens and when the reminder comes | The `cron.schedule` lines in [`day_threads.sql`](supabase/migrations/20261117100000_day_threads.sql#L14) (`5 17 * * *`, which is 00:05 in Jakarta) and [`init.sql`](supabase/migrations/20261117000000_init.sql#L35) (`0 13 * * *`, 20:00 in Jakarta). They are in UTC. Edit them before your first `supabase db push`. On a project that is already set up, add a new migration that calls `cron.unschedule` and `cron.schedule` again. |
-| Money words | `SUFFIX` in [`parse.ts`](supabase/functions/_shared/parse.ts#L16) (`rb`, `k`, `jt`...) and the "yesterday" words on [line 55](supabase/functions/_shared/parse.ts#L55). |
-| How numbers look | `rupiah()` in [`parse.ts`](supabase/functions/_shared/parse.ts#L80). It writes `1.750.000`. |
+| Money words | `SUFFIX` in [`parse.ts`](supabase/functions/_shared/parse.ts#L16) (`rb`, `k`, `jt`...) and the "yesterday" words on [line 60](supabase/functions/_shared/parse.ts#L60). |
+| How numbers look | `rupiah()` in [`parse.ts`](supabase/functions/_shared/parse.ts#L93). It writes `1.750.000`. |
 | What the bot says | `spendReply`, `dayHeaderText` and `reminderInThread` in [`format.ts`](supabase/functions/_shared/format.ts). |
 
 A secret change takes effect on the next message. After a code change, run `npm test`, then `supabase functions deploy slack --no-verify-jwt`.

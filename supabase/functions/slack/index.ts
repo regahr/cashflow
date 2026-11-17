@@ -5,7 +5,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { addDays, slackTsToWibDate, wibDate, weekStart } from "../_shared/dates.ts";
 import { billsThisMonth, computeLedger, configureBudgets, status, type Entry, WEEKDAY_BUDGET, WEEKEND_BUDGET } from "../_shared/engine.ts";
-import { dayHeaderText, type Logged, reminderInThread, type ReplyOptions, spendReply, statusText, weekCloseText } from "../_shared/format.ts";
+import { dayHeaderText, type Logged, reminderInThread, removedReply, type ReplyOptions, spendReply, statusText, weekCloseText } from "../_shared/format.ts";
 import { parseSpend, rupiah } from "../_shared/parse.ts";
 import { Slack, verifySlack } from "../_shared/slack.ts";
 
@@ -50,6 +50,11 @@ async function currentReply(logged: Logged, opts: ReplyOptions = {}) {
   return spendReply(status(computeLedger(entries, START_DATE, t)), logged, billsThisMonth(entries, t), opts);
 }
 
+async function removedText(amount: number, note: string, user: string) {
+  const entries = await loadEntries();
+  return removedReply(status(computeLedger(entries, START_DATE, today())), amount, note, who(user));
+}
+
 // ---------- day threads ----------
 
 async function dayOfThread(threadTs: string): Promise<string | null> {
@@ -82,7 +87,7 @@ async function dayFor(ts: string, threadTs: string | undefined): Promise<string 
 // ---------- message events ----------
 
 async function onNewMessage(ev: { ts: string; user: string; text: string; channel: string; thread_ts?: string }) {
-  const p = parseSpend(ev.text ?? "");
+  const p = parseSpend(ev.text ?? "", { anywhere: !!ev.thread_ts });
   if (p.kind === "ignore") return;
   const day = await dayFor(ev.ts, ev.thread_ts);
   if (!day) return; // a thread that is not a day thread (for example a planning thread)
@@ -108,14 +113,14 @@ async function onNewMessage(ev: { ts: string; user: string; text: string; channe
 
 async function onEdited(ev: { channel: string; message: { ts: string; user: string; text: string; thread_ts?: string } }) {
   const m = ev.message;
-  const p = parseSpend(m.text ?? "");
-  const { data: row } = await db.from("entries").select("id, reply_ts, deleted_at, spent_on, amount, note, bill")
+  const p = parseSpend(m.text ?? "", { anywhere: !!m.thread_ts });
+  const { data: row } = await db.from("entries").select("id, reply_ts, deleted_at, spent_on, amount, note, bill, user_id")
     .eq("source_key", m.ts).maybeSingle();
 
   if (p.kind === "ignore" || p.needsConfirm) {
     if (!row || row.deleted_at) return;
     await db.from("entries").update({ deleted_at: new Date().toISOString() }).eq("id", row.id);
-    if (row.reply_ts) await slack.update(ev.channel, row.reply_ts, `Removed: the message has no clear amount now.`);
+    if (row.reply_ts) await slack.update(ev.channel, row.reply_ts, await removedText(Number(row.amount), row.note, row.user_id));
     return;
   }
   if (!row) return onNewMessage({ ts: m.ts, user: m.user, text: m.text, channel: ev.channel, thread_ts: m.thread_ts }); // was chat, now a spend
@@ -134,11 +139,11 @@ async function onEdited(ev: { channel: string; message: { ts: string; user: stri
 }
 
 async function onDeleted(ev: { channel: string; deleted_ts: string }) {
-  const { data: row } = await db.from("entries").select("id, reply_ts, amount, note")
+  const { data: row } = await db.from("entries").select("id, reply_ts, amount, note, user_id")
     .eq("source_key", ev.deleted_ts).is("deleted_at", null).maybeSingle();
   if (!row) return;
   await db.from("entries").update({ deleted_at: new Date().toISOString() }).eq("id", row.id);
-  if (row.reply_ts) await slack.update(ev.channel, row.reply_ts, `Removed ${rupiah(Number(row.amount))} ${row.note}`.trim());
+  if (row.reply_ts) await slack.update(ev.channel, row.reply_ts, await removedText(Number(row.amount), row.note, row.user_id));
 }
 
 // ---------- /spent ----------

@@ -49,7 +49,12 @@ function tokens(text: string): Token[] {
   return out;
 }
 
-export function parseSpend(raw: string): Parsed {
+export interface ParseOptions {
+  /** In a day thread the amount may be anywhere in the line ("beli kue2 20rb"), if it has rb/k/jt or looks like 20.000. */
+  anywhere?: boolean;
+}
+
+export function parseSpend(raw: string, opts: ParseOptions = {}): Parsed {
   let text = raw.replace(/[*_~`]/g, "").trim();
   let daysBack = 0;
   const back = text.match(/^(kemarin|yesterday)\b[\s,:]*/i);
@@ -59,10 +64,18 @@ export function parseSpend(raw: string): Parsed {
   }
 
   const toks = tokens(text);
-  if (toks.length === 0 || toks[0].start !== 0) return { kind: "ignore" };
-
-  const first = toks[0];
-  const counted = [first, ...toks.slice(1).filter((t) => t.hasSuffix || t.grouped || Math.abs(t.value) >= 1_000)];
+  const clear = (t: Token) => t.hasSuffix || t.grouped || Math.abs(t.value) >= 1_000;
+  let counted: Token[];
+  let first: Token;
+  if (toks.length > 0 && toks[0].start === 0) {
+    first = toks[0];
+    counted = [first, ...toks.slice(1).filter(clear)];
+  } else if (opts.anywhere && toks.some(clear)) {
+    counted = toks.filter(clear);
+    first = counted[0];
+  } else {
+    return { kind: "ignore" };
+  }
   const amount = counted.reduce((a, t) => a + t.value, 0);
 
   let note = text;

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { computeLedger, status } from "../supabase/functions/_shared/engine.ts";
-import { dayHeaderText, spendReply, statusText } from "../supabase/functions/_shared/format.ts";
+import { dayHeaderText, removedReply, spendReply, statusText } from "../supabase/functions/_shared/format.ts";
 
 // Default budgets: 100.000 a weekday, 300.000 a weekend day.
 const MON = "2026-11-16", TUE = "2026-11-17";
@@ -69,4 +69,13 @@ test("/spent week status keeps every number", () => {
   assert.match(t, /75\.000 left today/);
   assert.match(t, /Spent today 25\.000 of 100\.000/);
   assert.match(t, /Extra this week 50\.000 · Bills this month 1\.000\.000/);
+});
+
+test("removed reply: what was removed, who, and the new totals", () => {
+  const s = st([{ date: MON, amount: 100_000 }]);
+  assert.equal(removedReply(s, 20_000, "beli kue2", "Alex"), [
+    ":wastebasket: *Removed 20.000 beli kue2*",
+    "Alex",
+    "_Spent today 0 · Week 1.000.000 left · Tomorrow 100.000_",
+  ].join("\n"));
 });

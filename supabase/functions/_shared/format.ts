@@ -66,6 +66,16 @@ export function spendReply(s: Status, l: Logged, bills: number, o: ReplyOptions 
   return lines.join("\n");
 }
 
+/** The bot's reply after the spend message was deleted, or edited to have no amount. */
+export function removedReply(s: Status, amount: number, note: string, who: string): string {
+  const what = note ? `${rupiah(amount)} ${note}` : rupiah(amount);
+  return [
+    `:wastebasket: *Removed ${what}*`,
+    who,
+    `_Spent today ${rupiah(s.spentToday)} · ${weekText(s.leftWeek)} · ${tomorrowText(s)}_`,
+  ].join("\n");
+}
+
 /** `/spent week`: the full picture, on demand. */
 export function statusText(s: Status, bills: number): string {
   const head = s.overToday > 0
