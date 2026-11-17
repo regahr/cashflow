@@ -1,24 +1,33 @@
 // Budget engine. Plain code, no I/O, same input gives the same output.
 //
 // Rules:
-// - Budget: 200.000 Mon-Fri, 500.000 Sat-Sun. Week = Mon-Sun, WIB.
-// - Saved money (a finished day's underspend, plus carry-in from last week) pays an overspend first.  (1a)
+// - Budget: one amount for each weekday, one for each weekend day (see configureBudgets). Week = Mon-Sun, WIB.
+// - Saved money (a finished day's underspend, plus carry-in from last week) pays an overspend first.
 // - The rest of a weekday overspend splits equally over the weekdays left. A day never goes below 0.
 //   What does not fit goes to the weekend days left, same rule. What still does not fit is floating debt.
 // - Saturday overspend goes to Sunday. Sunday overspend becomes floating debt.
-// - Sunday close: the saved money left pays the floating debt first, the rest carries to next week. (2a)
+// - Sunday close: the saved money left pays the floating debt first, the rest carries to next week.
 // - Carry-in is shown as "extra this week". It is not added to the daily budgets.
 // - Entries tagged #bill are stored but never count against the budget.
 
 import { addDays, dayIndex, weekStart } from "./dates.ts";
 
-export const WEEKDAY_BUDGET = 200_000;
-export const WEEKEND_BUDGET = 500_000;
-export const BASE_BUDGETS = [
-  WEEKDAY_BUDGET, WEEKDAY_BUDGET, WEEKDAY_BUDGET, WEEKDAY_BUDGET, WEEKDAY_BUDGET,
-  WEEKEND_BUDGET, WEEKEND_BUDGET,
-];
-export const WEEK_BUDGET = BASE_BUDGETS.reduce((a, b) => a + b, 0); // 2.000.000
+// Defaults. A deployment sets its own amounts with configureBudgets (from the CASHFLOW_*_BUDGET secrets).
+export let WEEKDAY_BUDGET = 100_000;
+export let WEEKEND_BUDGET = 300_000;
+export let BASE_BUDGETS: number[] = [];
+export let WEEK_BUDGET = 0;
+
+export function configureBudgets(weekday: number, weekend: number): void {
+  if (!Number.isInteger(weekday) || !Number.isInteger(weekend) || weekday < 0 || weekend < 0) {
+    throw new Error(`budgets must be whole numbers >= 0, got ${weekday} and ${weekend}`);
+  }
+  WEEKDAY_BUDGET = weekday;
+  WEEKEND_BUDGET = weekend;
+  BASE_BUDGETS = [weekday, weekday, weekday, weekday, weekday, weekend, weekend];
+  WEEK_BUDGET = BASE_BUDGETS.reduce((a, b) => a + b, 0);
+}
+configureBudgets(WEEKDAY_BUDGET, WEEKEND_BUDGET);
 
 export interface Entry {
   date: string; // WIB "YYYY-MM-DD"

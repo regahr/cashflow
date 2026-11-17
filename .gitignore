@@ -8,6 +8,7 @@
 !/docs/
 !/supabase/
 !/test/
+!/scripts/
 
 /supabase/*
 !/supabase/config.toml

@@ -1,0 +1,3 @@
+week_start,state,budget,carry_in,spent,bills,carry_out,floating_debt
+2026-11-23,closed,1100000,0,960000,1500000,140000,0
+2026-11-30,open,1100000,140000,165000,0,,0

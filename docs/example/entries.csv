@@ -1,0 +1,15 @@
+date,who,amount,note,bill
+2026-11-23,Sam,35000,kopi,false
+2026-11-23,Alex,125000,makan siang,false
+2026-11-24,Alex,30000,makan parkir,false
+2026-11-24,Sam,1500000,listrik,true
+2026-11-25,Sam,140000,belanja,false
+2026-11-25,Alex,15000,parkir,false
+2026-11-26,Alex,0,,false
+2026-11-27,Sam,85000,bensin,false
+2026-11-27,Alex,-20000,refund payung,false
+2026-11-28,Alex,250000,jalan-jalan,false
+2026-11-28,Sam,120000,nonton,false
+2026-11-29,Sam,180000,makan keluarga,false
+2026-11-30,Alex,120000,makan,false
+2026-12-01,Sam,45000,sarapan,false

@@ -4,7 +4,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { addDays, slackTsToWibDate, wibDate, weekStart } from "../_shared/dates.ts";
-import { billsThisMonth, computeLedger, status, type Entry } from "../_shared/engine.ts";
+import { billsThisMonth, computeLedger, configureBudgets, status, type Entry, WEEKDAY_BUDGET, WEEKEND_BUDGET } from "../_shared/engine.ts";
 import { dayHeaderText, type Logged, reminderInThread, type ReplyOptions, spendReply, statusText, weekCloseText } from "../_shared/format.ts";
 import { parseSpend, rupiah } from "../_shared/parse.ts";
 import { Slack, verifySlack } from "../_shared/slack.ts";
@@ -16,6 +16,11 @@ const env = (k: string) => {
 };
 
 const CHANNEL = env("CASHFLOW_CHANNEL_ID");
+// Daily amounts in whole currency units. Leave unset to use the defaults in engine.ts.
+configureBudgets(
+  Number(Deno.env.get("CASHFLOW_WEEKDAY_BUDGET") ?? WEEKDAY_BUDGET),
+  Number(Deno.env.get("CASHFLOW_WEEKEND_BUDGET") ?? WEEKEND_BUDGET),
+);
 const START_DATE = env("CASHFLOW_START_DATE"); // a Monday, "YYYY-MM-DD"
 const NAMES = Object.fromEntries(
   (Deno.env.get("CASHFLOW_USER_NAMES") ?? "").split(",").filter(Boolean).map((p) => p.split("=")),
