@@ -1,0 +1,22 @@
+# Allow-list: only these paths can be committed. Everything else in this folder is private.
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/package.json
+!/slack-manifest.yaml
+!/docs/
+!/supabase/
+!/test/
+
+/supabase/*
+!/supabase/config.toml
+!/supabase/.gitignore
+!/supabase/functions/
+!/supabase/migrations/
+
+/test/e2e/
+
+node_modules/
+.env
+.env.*

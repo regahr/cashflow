@@ -1,0 +1,33 @@
+# Create the app at https://api.slack.com/apps -> "Create New App" -> "From a manifest".
+# Replace <project-ref> with your Supabase project ref (2 places).
+display_information:
+  name: Cashflow
+  description: Daily spend log for the household budget
+features:
+  bot_user:
+    display_name: cashflow
+    always_online: true
+  slash_commands:
+    - command: /spent
+      url: https://<project-ref>.supabase.co/functions/v1/slack
+      description: Log a spend, show the week, or undo your last entry
+      usage_hint: 50rb bakso | week | undo
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - channels:history
+      - groups:history
+      - reactions:write
+      - commands
+      - files:write
+settings:
+  event_subscriptions:
+    request_url: https://<project-ref>.supabase.co/functions/v1/slack
+    bot_events:
+      - message.channels
+      - message.groups
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
