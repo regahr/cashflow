@@ -18,6 +18,7 @@ Every night at 00:05 the bot opens a thread for the new day. Everyone replies in
 jajan 20rb                 20.000, in a day thread the amount can come last
 1,5jt listrik #bill        1.500.000, kept outside the daily budget
 kemarin 40rb bensin        logged on yesterday
+sarapan senin 30rb         logged on Monday of this week
 -20rb refund               takes 20.000 off
 0                          nothing spent today
 ```
@@ -71,7 +72,7 @@ There is an example of all four files, made from a made-up week of chat messages
 - Postgres keeps one row per entry. Nothing else is stored: every number is replayed from those rows each time, so fixing an entry from three days ago just works.
 - pg_cron calls the same function at 00:05 and 20:00.
 - Slack is called with plain `fetch`. The only package is `supabase-js`.
-- 49 unit tests, including 500 random weeks that check the money always adds up: what is left at the end equals the week's budget plus carry-over minus what was spent.
+- 51 unit tests, including 500 random weeks that check the money always adds up: what is left at the end equals the week's budget plus carry-over minus what was spent.
 
 The budget logic is in [`engine.ts`](supabase/functions/_shared/engine.ts) (about 200 lines) and the input parsing is in [`parse.ts`](supabase/functions/_shared/parse.ts) (about 100).
 
@@ -80,7 +81,7 @@ The budget logic is in [`engine.ts`](supabase/functions/_shared/engine.ts) (abou
 It was made in Indonesia. So:
 
 - Rupiah only, Jakarta time (WIB) only.
-- It understands this shorthand: `rb`, `ribu`, `k`, `jt`, `juta`, and `kemarin` or `yesterday`. Nothing else.
+- It understands this shorthand: `rb`, `ribu`, `k`, `jt`, `juta`, `kemarin` or `yesterday`, and day names (`senin`, `monday`...). Nothing else.
 - One channel, and every spend is typed by hand. No bank sync, no charts.
 - Supabase pauses free projects after a week with no activity. Daily use keeps it awake.
 
@@ -180,6 +181,10 @@ For anything bigger, please open an issue first, so it can be discussed before y
 One thing stays: no LLM in the money math. The same messages should always give the same numbers.
 
 Then fork, make a branch, check that `npm test` passes, and open a pull request that says what changed and why.
+
+## Versions
+
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md). Each version is a git tag.
 
 ## License
 

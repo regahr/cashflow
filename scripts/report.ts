@@ -9,7 +9,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addDays, dayName, weekStart } from "../supabase/functions/_shared/dates.ts";
+import { addDays, dayName, logDate, weekStart } from "../supabase/functions/_shared/dates.ts";
 import { BASE_BUDGETS, computeLedger, configureBudgets, type Entry, status, WEEKDAY_BUDGET, WEEKEND_BUDGET } from "../supabase/functions/_shared/engine.ts";
 import { parseSpend } from "../supabase/functions/_shared/parse.ts";
 
@@ -37,7 +37,7 @@ function exampleRows(): Row[] {
   return EXAMPLE.flatMap(([day, who, text]) => {
     const p = parseSpend(text);
     if (p.kind !== "spend" || p.needsConfirm) throw new Error(`example line not understood: ${text}`);
-    return [{ date: addDays(day, -p.daysBack), who, amount: p.amount, note: p.note, bill: p.bill }];
+    return [{ date: logDate(day, p), who, amount: p.amount, note: p.note, bill: p.bill }];
   });
 }
 

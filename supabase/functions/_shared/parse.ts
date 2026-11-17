@@ -5,16 +5,31 @@
 //   "25k makan 5k parkir"   -> 30.000 (every amount with a suffix or >= 1.000 adds up)
 //   "1,5jt listrik #bill"   -> 1.500.000, bill (outside the budget)
 //   "kemarin 50.000 bensin" -> 50.000 on yesterday
+//   "sarapan senin 30rb"    -> 30.000 on Monday of this week (a day name anywhere in the line)
 //   "-20rb refund"          -> -20.000
 //   "0"                     -> 0, closes the day
 //   "50 bakso"              -> 50, needs a confirm ("did you mean 50.000?")
 
 export type Parsed =
-  | { kind: "spend"; amount: number; note: string; bill: boolean; daysBack: number; needsConfirm: boolean }
+  | { kind: "spend"; amount: number; note: string; bill: boolean; daysBack: number; weekday: number | null; needsConfirm: boolean }
   | { kind: "ignore" };
 
 const SUFFIX: Record<string, number> = { k: 1_000, rb: 1_000, ribu: 1_000, jt: 1_000_000, juta: 1_000_000 };
 const AMOUNT = /(^|\s)(-?)(\d+(?:[.,]\d+)*)\s?(k|rb|ribu|jt|juta)?(?=$|\s|[^\p{L}\p{N}])/giu;
+// Monday = 0 ... Sunday = 6. A day name counts only for this week, and only when one day is named.
+const WEEKDAYS: [RegExp, number][] = [
+  [/^(senin|monday)$/i, 0], [/^(selasa|tuesday)$/i, 1], [/^(rabu|wednesday)$/i, 2], [/^(kamis|thursday)$/i, 3],
+  [/^(jumat|jum'at|friday)$/i, 4], [/^(sabtu|saturday)$/i, 5], [/^(minggu|sunday)$/i, 6],
+];
+
+function namedWeekday(text: string): number | null {
+  const found = new Set<number>();
+  for (const word of text.split(/[^\p{L}']+/u)) {
+    for (const [re, i] of WEEKDAYS) if (re.test(word)) found.add(i);
+  }
+  return found.size === 1 ? [...found][0] : null;
+}
+
 const GROUPED = /^\d{1,3}([.,]\d{3})+$/;
 const DECIMAL = /^\d+[.,]\d{1,2}$/;
 
@@ -86,7 +101,8 @@ export function parseSpend(raw: string, opts: ParseOptions = {}): Parsed {
   note = note.replace(/#bill\b/gi, " ").replace(/\s+/g, " ").trim();
 
   const needsConfirm = !first.hasSuffix && !first.grouped && first.value !== 0 && Math.abs(first.value) < 1_000;
-  return { kind: "spend", amount, note, bill, daysBack, needsConfirm };
+  const weekday = daysBack ? null : namedWeekday(note);
+  return { kind: "spend", amount, note, bill, daysBack, weekday, needsConfirm };
 }
 
 /** "1740000" -> "1.740.000" */

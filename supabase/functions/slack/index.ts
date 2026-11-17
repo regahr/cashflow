@@ -3,7 +3,7 @@
 // Plain code. No LLM.
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
-import { addDays, slackTsToWibDate, wibDate, weekStart } from "../_shared/dates.ts";
+import { addDays, logDate, slackTsToWibDate, wibDate, weekStart } from "../_shared/dates.ts";
 import { billsThisMonth, computeLedger, configureBudgets, status, type Entry, WEEKDAY_BUDGET, WEEKEND_BUDGET } from "../_shared/engine.ts";
 import { dayHeaderText, type Logged, reminderInThread, removedReply, type ReplyOptions, spendReply, statusText, weekCloseText } from "../_shared/format.ts";
 import { parseSpend, rupiah } from "../_shared/parse.ts";
@@ -97,7 +97,7 @@ async function onNewMessage(ev: { ts: string; user: string; text: string; channe
     await slack.post(ev.channel, `Did you mean ${rupiah(p.amount * 1000)}? Edit your message to fix it. I did not log it.`, replyIn);
     return;
   }
-  const date = addDays(day, -p.daysBack);
+  const date = logDate(day, p, START_DATE);
   const { data, error } = await db.from("entries").insert({
     source_key: ev.ts, channel: ev.channel, user_id: ev.user, spent_on: date,
     amount: p.amount, note: p.note, bill: p.bill,
@@ -127,7 +127,7 @@ async function onEdited(ev: { channel: string; message: { ts: string; user: stri
 
   const day = await dayFor(m.ts, m.thread_ts);
   if (!day) return;
-  const date = addDays(day, -p.daysBack);
+  const date = logDate(day, p, START_DATE);
   const same = !row.deleted_at && row.spent_on === date && Number(row.amount) === p.amount && row.note === p.note && row.bill === p.bill;
   if (same) return; // e.g. Slack marks the parent "changed" when a thread reply is added
   await db.from("entries").update({
@@ -172,7 +172,7 @@ async function onCommand(f: URLSearchParams) {
   if (p.kind === "ignore" || p.needsConfirm) {
     return slack.post(CHANNEL, `${who(user)}: I could not read "${text}". Try "/spent 50rb bakso".`, thread);
   }
-  const date = addDays(today(), -p.daysBack);
+  const date = logDate(today(), p, START_DATE);
   const { error } = await db.from("entries").insert({
     source_key: `cmd:${f.get("trigger_id")}`, channel: CHANNEL, user_id: user, spent_on: date,
     amount: p.amount, note: p.note, bill: p.bill,

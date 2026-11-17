@@ -29,6 +29,17 @@ export function weekStart(date: string): string {
   return addDays(date, -dayIndex(date));
 }
 
+/**
+ * The date a spend counts for. "kemarin" = the day before. A day name = that day of this week,
+ * if it is not later than `day` and not before `start`. Otherwise `day`.
+ */
+export function logDate(day: string, p: { daysBack: number; weekday: number | null }, start = ""): string {
+  if (p.daysBack) return addDays(day, -p.daysBack);
+  if (p.weekday === null || p.weekday > dayIndex(day)) return day;
+  const d = addDays(weekStart(day), p.weekday);
+  return d < start ? day : d;
+}
+
 export function daysBetween(a: string, b: string): number {
   return Math.round((toUtcMs(b) - toUtcMs(a)) / DAY_MS);
 }

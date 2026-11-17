@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseSpend, rupiah } from "../supabase/functions/_shared/parse.ts";
 
-function spend(text: string) {
-  const p = parseSpend(text);
+function spend(text: string, opts: { anywhere?: boolean } = {}) {
+  const p = parseSpend(text, opts);
   assert.equal(p.kind, "spend", text);
   return p as Extract<typeof p, { kind: "spend" }>;
 }
@@ -87,4 +87,24 @@ test("anywhere mode still ignores lines with no clear amount", () => {
 
 test("at the top level the amount must still come first", () => {
   assert.equal(parseSpend("beli kue2 20rb").kind, "ignore");
+});
+
+test("a day name sets the weekday, only when one day is named", () => {
+  assert.equal(spend("Breakfast senin 40rb", { anywhere: true }).weekday, 0);
+  assert.equal(spend("40rb sarapan Jum'at").weekday, 4);
+  assert.equal(spend("50k bensin").weekday, null);
+  assert.equal(spend("Indomaret senin 13rb\nSarapan selasa 30rb", { anywhere: true }).weekday, null);
+  assert.equal(spend("kemarin 20rb senin").weekday, null); // kemarin wins
+  assert.equal(spend("20rb seninnya").weekday, null); // whole words only
+});
+
+test("logDate: day name in this week, never later than the day, never before the start", async () => {
+  const { logDate } = await import("../supabase/functions/_shared/dates.ts");
+  const TUE = "2026-11-17";
+  assert.equal(logDate(TUE, { daysBack: 0, weekday: 0 }), "2026-11-16");
+  assert.equal(logDate(TUE, { daysBack: 0, weekday: 1 }), TUE);
+  assert.equal(logDate(TUE, { daysBack: 0, weekday: 4 }), TUE); // Friday is later: stays today
+  assert.equal(logDate(TUE, { daysBack: 1, weekday: null }), "2026-11-16");
+  assert.equal(logDate(TUE, { daysBack: 0, weekday: 0 }, TUE), TUE); // before the start date
+  assert.equal(logDate("2026-11-22", { daysBack: 0, weekday: 6 }), "2026-11-22");
 });
