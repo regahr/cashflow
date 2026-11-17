@@ -66,6 +66,38 @@ export function spendReply(s: Status, l: Logged, bills: number, o: ReplyOptions 
   return lines.join("\n");
 }
 
+/** The reply after a message with one or more spends. One line for each spend, then who and the total. */
+export function spendsReply(s: Status, items: Logged[], bills: number, o: ReplyOptions = {}): string {
+  if (items.length === 1) return spendReply(s, items[0], bills, o);
+  const lines: string[] = [];
+  if (s.overToday > 0) {
+    lines.push(`:warning: *Over today by ${rupiah(s.overToday)}*`);
+    const where: string[] = [];
+    if (s.coveredByExtra > 0) where.push(`Extra paid ${rupiah(s.coveredByExtra)}`);
+    const moved = s.movedTo.reduce((a, m) => a + m.amount, 0);
+    if (moved > 0) where.push(`${rupiah(moved)} moved to ${dayList(s.movedTo.map((m) => m.day))}`);
+    if (s.toDebt > 0) where.push(`${rupiah(s.toDebt)} to floating debt`);
+    if (where.length) lines.push(where.join(" · "));
+  } else {
+    lines.push(`:white_check_mark: *${rupiah(s.leftToday)} left today*`);
+  }
+  for (const l of items) {
+    const parts = [l.note ? `${rupiah(l.amount)} ${l.note}` : rupiah(l.amount)];
+    if (l.date !== s.today) parts.push(`for ${shortDate(l.date)}`);
+    if (l.bill) parts.push("bill, not in the budget");
+    lines.push("• " + parts.join(" · "));
+  }
+  const total = items.reduce((a, l) => a + l.amount, 0);
+  const tail = [`${items.length} items, ${rupiah(total)}`, items[0].who];
+  if (o.corrected) tail.push("corrected");
+  lines.push(tail.join(" · "));
+  const ctx = [`Spent today ${rupiah(s.spentToday)}`, weekText(s.leftWeek), tomorrowText(s)];
+  if (items.some((l) => l.bill)) ctx.push(`Bills this month ${rupiah(bills)}`);
+  lines.push(`_${ctx.join(" · ")}_`);
+  if (o.fromChannel) lines.push(hintLine);
+  return lines.join("\n");
+}
+
 /** The bot's reply after the spend message was deleted, or edited to have no amount. */
 export function removedReply(s: Status, amount: number, note: string, who: string): string {
   const what = note ? `${rupiah(amount)} ${note}` : rupiah(amount);

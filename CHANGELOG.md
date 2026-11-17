@@ -2,6 +2,13 @@
 
 Each version is a git tag. The newest is at the top.
 
+## 0.5.0 (2026-11-17)
+
+- A message with 2 or more spend lines makes one entry for each line. Each line can name its own day, so a list like `indomaret senin 13rb` / `sarapan selasa 30rb` puts each spend on the right day.
+- One reply for the whole message: one line for each spend, then the count, the total and who.
+- Edit the message and all its entries update. Delete it and all of them are removed.
+- A message with one spend line and some plain lines is still one entry, as before.
+
 ## 0.4.0 (2026-11-17)
 
 - A day name puts a spend on that day of this week: `sarapan senin 30rb` counts for Monday. Indonesian and English names work, anywhere in the line.

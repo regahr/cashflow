@@ -23,6 +23,14 @@ sarapan senin 30rb         logged on Monday of this week
 0                          nothing spent today
 ```
 
+A list works too. Each line with an amount is its own entry, on its own day:
+
+```
+indomaret senin 13rb
+sarapan selasa 30rb
+makan 73rb
+```
+
 The bot puts a check mark on the message and answers. The first line, in bold, is how much is left today. Under it, in grey, is what was spent today, what is left this week and tomorrow's budget.
 
 Made a typo? Edit the message and the reply updates. Delete it and the entry goes away. At 20:00 the bot sends a reminder if nobody has logged anything that day. On Monday at 00:05 it closes the week and posts a CSV of every entry, as a backup.
@@ -72,7 +80,7 @@ There is an example of all four files, made from a made-up week of chat messages
 - Postgres keeps one row per entry. Nothing else is stored: every number is replayed from those rows each time, so fixing an entry from three days ago just works.
 - pg_cron calls the same function at 00:05 and 20:00.
 - Slack is called with plain `fetch`. The only package is `supabase-js`.
-- 51 unit tests, including 500 random weeks that check the money always adds up: what is left at the end equals the week's budget plus carry-over minus what was spent.
+- 53 unit tests, including 500 random weeks that check the money always adds up: what is left at the end equals the week's budget plus carry-over minus what was spent.
 
 The budget logic is in [`engine.ts`](supabase/functions/_shared/engine.ts) (about 200 lines) and the input parsing is in [`parse.ts`](supabase/functions/_shared/parse.ts) (about 100).
 

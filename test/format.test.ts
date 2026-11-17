@@ -79,3 +79,21 @@ test("removed reply: what was removed, who, and the new totals", () => {
     "_Spent today 0 · Week 1.000.000 left · Tomorrow 100.000_",
   ].join("\n"));
 });
+
+test("a message with several spends: one line each, then the total and who", async () => {
+  const { spendsReply } = await import("../supabase/functions/_shared/format.ts");
+  const s = st([{ date: MON, amount: 41_000 }, { date: TUE, amount: 60_000 }]);
+  const r = spendsReply(s, [
+    { amount: 13_000, note: "Indomaret senin", who: "Sam", date: MON, bill: false },
+    { amount: 28_000, note: "Shopee senin", who: "Sam", date: MON, bill: false },
+    { amount: 60_000, note: "Sarapan", who: "Sam", date: TUE, bill: false },
+  ], 0);
+  assert.equal(r, [
+    ":white_check_mark: *40.000 left today*",
+    "• 13.000 Indomaret senin · for Mon 16 Nov",
+    "• 28.000 Shopee senin · for Mon 16 Nov",
+    "• 60.000 Sarapan",
+    "3 items, 101.000 · Sam",
+    "_Spent today 60.000 · Week 999.000 left · Tomorrow 100.000_",
+  ].join("\n"));
+});

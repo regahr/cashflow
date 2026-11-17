@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { addDays, dayName, logDate, weekStart } from "../supabase/functions/_shared/dates.ts";
 import { BASE_BUDGETS, computeLedger, configureBudgets, type Entry, status, WEEKDAY_BUDGET, WEEKEND_BUDGET } from "../supabase/functions/_shared/engine.ts";
-import { parseSpend } from "../supabase/functions/_shared/parse.ts";
+import { parseMessage } from "../supabase/functions/_shared/parse.ts";
 
 interface Row { date: string; who: string; amount: number; note: string; bill: boolean }
 
@@ -35,9 +35,9 @@ const EXAMPLE: [string, string, string][] = [
 
 function exampleRows(): Row[] {
   return EXAMPLE.flatMap(([day, who, text]) => {
-    const p = parseSpend(text);
-    if (p.kind !== "spend" || p.needsConfirm) throw new Error(`example line not understood: ${text}`);
-    return [{ date: logDate(day, p), who, amount: p.amount, note: p.note, bill: p.bill }];
+    const items = parseMessage(text);
+    if (items.length === 0 || items.some((p) => p.needsConfirm)) throw new Error(`example line not understood: ${text}`);
+    return items.map((p) => ({ date: logDate(day, p), who, amount: p.amount, note: p.note, bill: p.bill }));
   });
 }
 

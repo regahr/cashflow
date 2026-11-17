@@ -108,3 +108,15 @@ test("logDate: day name in this week, never later than the day, never before the
   assert.equal(logDate(TUE, { daysBack: 0, weekday: 0 }, TUE), TUE); // before the start date
   assert.equal(logDate("2026-11-22", { daysBack: 0, weekday: 6 }), "2026-11-22");
 });
+
+test("a message with 2 or more spend lines: one entry for each line, each with its own day", async () => {
+  const { parseMessage } = await import("../supabase/functions/_shared/parse.ts");
+  const items = parseMessage("Indonaret senin 13rb\nShoppe senin 28rb\nSarapan selasa 30rb\nMadang 73rb", { anywhere: true });
+  assert.deepEqual(items.map((p) => [p.amount, p.note, p.weekday]), [
+    [13_000, "Indonaret senin", 0], [28_000, "Shoppe senin", 0], [30_000, "Sarapan selasa", 1], [73_000, "Madang", null],
+  ]);
+  // one spend line plus a plain line: one entry, as before
+  assert.deepEqual(parseMessage("makan siang\n50rb", { anywhere: true }).map((p) => [p.amount, p.note]), [[50_000, "makan siang"]]);
+  assert.equal(parseMessage("25k makan 5k parkir").length, 1);
+  assert.equal(parseMessage("halo semua").length, 0);
+});

@@ -5,8 +5,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { addDays, logDate, slackTsToWibDate, wibDate, weekStart } from "../_shared/dates.ts";
 import { billsThisMonth, computeLedger, configureBudgets, status, type Entry, WEEKDAY_BUDGET, WEEKEND_BUDGET } from "../_shared/engine.ts";
-import { dayHeaderText, type Logged, reminderInThread, removedReply, type ReplyOptions, spendReply, statusText, weekCloseText } from "../_shared/format.ts";
-import { parseSpend, rupiah } from "../_shared/parse.ts";
+import { dayHeaderText, type Logged, reminderInThread, removedReply, type ReplyOptions, spendReply, spendsReply, statusText, weekCloseText } from "../_shared/format.ts";
+import { parseMessage, parseSpend, rupiah } from "../_shared/parse.ts";
 import { Slack, verifySlack } from "../_shared/slack.ts";
 
 const env = (k: string) => {
@@ -43,11 +43,12 @@ async function loadEntries(): Promise<Entry[]> {
   return (data ?? []).map((r) => ({ date: r.spent_on, amount: Number(r.amount), bill: r.bill }));
 }
 
-async function currentReply(logged: Logged, opts: ReplyOptions = {}) {
+async function currentReply(logged: Logged | Logged[], opts: ReplyOptions = {}) {
+  const items = Array.isArray(logged) ? logged : [logged];
   const entries = await loadEntries();
   const t = today();
-  if (t < START_DATE) return `Logged ${rupiah(logged.amount)}. The budget starts on ${START_DATE}.`;
-  return spendReply(status(computeLedger(entries, START_DATE, t)), logged, billsThisMonth(entries, t), opts);
+  if (t < START_DATE) return `Logged ${rupiah(items.reduce((a, l) => a + l.amount, 0))}. The budget starts on ${START_DATE}.`;
+  return spendsReply(status(computeLedger(entries, START_DATE, t)), items, billsThisMonth(entries, t), opts);
 }
 
 async function removedText(amount: number, note: string, user: string) {
@@ -86,64 +87,93 @@ async function dayFor(ts: string, threadTs: string | undefined): Promise<string 
 
 // ---------- message events ----------
 
+/** Row keys for one Slack message: its ts for one entry, "ts#0", "ts#1"... for a message with one entry per line. */
+const keysFor = (ts: string, n: number) => n === 1 ? [ts] : Array.from({ length: n }, (_, i) => `${ts}#${i}`);
+const allKeys = (ts: string) => [ts, ...keysFor(ts, 50)];
+
 async function onNewMessage(ev: { ts: string; user: string; text: string; channel: string; thread_ts?: string }) {
-  const p = parseSpend(ev.text ?? "", { anywhere: !!ev.thread_ts });
-  if (p.kind === "ignore") return;
+  const items = parseMessage(ev.text ?? "", { anywhere: !!ev.thread_ts });
+  if (items.length === 0) return;
   const day = await dayFor(ev.ts, ev.thread_ts);
   if (!day) return; // a thread that is not a day thread (for example a planning thread)
   if (day < START_DATE) return;
   const replyIn = ev.thread_ts ?? await ensureDayThread(slackTsToWibDate(ev.ts));
-  if (p.needsConfirm) {
-    await slack.post(ev.channel, `Did you mean ${rupiah(p.amount * 1000)}? Edit your message to fix it. I did not log it.`, replyIn);
+  const unclear = items.find((p) => p.needsConfirm);
+  if (unclear) {
+    await slack.post(ev.channel, `Did you mean ${rupiah(unclear.amount * 1000)}? Edit your message to fix it. I did not log it.`, replyIn);
     return;
   }
-  const date = logDate(day, p, START_DATE);
-  const { data, error } = await db.from("entries").insert({
-    source_key: ev.ts, channel: ev.channel, user_id: ev.user, spent_on: date,
+  const keys = keysFor(ev.ts, items.length);
+  const rows = items.map((p, i) => ({
+    source_key: keys[i], channel: ev.channel, user_id: ev.user, spent_on: logDate(day, p, START_DATE),
     amount: p.amount, note: p.note, bill: p.bill,
-  }).select("id").maybeSingle();
+  }));
+  const { error } = await db.from("entries").insert(rows);
   if (error?.code === "23505") return; // already logged (Slack retry)
   if (error) throw error;
 
   await slack.react(ev.channel, ev.ts, "white_check_mark");
-  const text = await currentReply({ amount: p.amount, note: p.note, who: who(ev.user), date, bill: p.bill }, { fromChannel: !ev.thread_ts });
-  const replyTs = await slack.post(ev.channel, text, replyIn);
-  if (replyTs && data) await db.from("entries").update({ reply_ts: replyTs }).eq("id", data.id);
+  const logged = rows.map((r) => ({ amount: r.amount, note: r.note, who: who(ev.user), date: r.spent_on, bill: r.bill }));
+  const replyTs = await slack.post(ev.channel, await currentReply(logged, { fromChannel: !ev.thread_ts }), replyIn);
+  if (replyTs) await db.from("entries").update({ reply_ts: replyTs }).in("source_key", keys);
 }
 
 async function onEdited(ev: { channel: string; message: { ts: string; user: string; text: string; thread_ts?: string } }) {
   const m = ev.message;
-  const p = parseSpend(m.text ?? "", { anywhere: !!m.thread_ts });
-  const { data: row } = await db.from("entries").select("id, reply_ts, deleted_at, spent_on, amount, note, bill, user_id")
-    .eq("source_key", m.ts).maybeSingle();
+  const items = parseMessage(m.text ?? "", { anywhere: !!m.thread_ts });
+  const { data } = await db.from("entries").select("id, source_key, reply_ts, deleted_at, spent_on, amount, note, bill, user_id")
+    .in("source_key", allKeys(m.ts));
+  const old = data ?? [];
+  const live = old.filter((r) => !r.deleted_at);
+  const replyTs = old.find((r) => r.reply_ts)?.reply_ts;
 
-  if (p.kind === "ignore" || p.needsConfirm) {
-    if (!row || row.deleted_at) return;
-    await db.from("entries").update({ deleted_at: new Date().toISOString() }).eq("id", row.id);
-    if (row.reply_ts) await slack.update(ev.channel, row.reply_ts, await removedText(Number(row.amount), row.note, row.user_id));
+  if (items.length === 0 || items.some((p) => p.needsConfirm)) {
+    if (live.length === 0) return;
+    await db.from("entries").update({ deleted_at: new Date().toISOString() }).in("id", live.map((r) => r.id));
+    const amount = live.reduce((a, r) => a + Number(r.amount), 0);
+    const note = live.length === 1 ? live[0].note : `${live.length} items`;
+    if (replyTs) await slack.update(ev.channel, replyTs, await removedText(amount, note, live[0].user_id));
     return;
   }
-  if (!row) return onNewMessage({ ts: m.ts, user: m.user, text: m.text, channel: ev.channel, thread_ts: m.thread_ts }); // was chat, now a spend
+  if (old.length === 0) return onNewMessage({ ts: m.ts, user: m.user, text: m.text, channel: ev.channel, thread_ts: m.thread_ts }); // was chat, now a spend
 
   const day = await dayFor(m.ts, m.thread_ts);
   if (!day) return;
-  const date = logDate(day, p, START_DATE);
-  const same = !row.deleted_at && row.spent_on === date && Number(row.amount) === p.amount && row.note === p.note && row.bill === p.bill;
+  const keys = keysFor(m.ts, items.length);
+  const next = items.map((p, i) => ({ source_key: keys[i], spent_on: logDate(day, p, START_DATE), amount: p.amount, note: p.note, bill: p.bill }));
+  const sig = (r: { source_key: string; spent_on: string; amount: number | string; note: string; bill: boolean }) =>
+    [r.source_key, r.spent_on, Number(r.amount), r.note, r.bill].join("|");
+  const same = live.length === next.length && next.every((n) => live.some((r) => sig(r) === sig(n)));
   if (same) return; // e.g. Slack marks the parent "changed" when a thread reply is added
-  await db.from("entries").update({
-    spent_on: date, amount: p.amount, note: p.note, bill: p.bill, deleted_at: null, updated_at: new Date().toISOString(),
-  }).eq("id", row.id);
-  const text = await currentReply({ amount: p.amount, note: p.note, who: who(m.user), date, bill: p.bill }, { corrected: true });
-  if (row.reply_ts) await slack.update(ev.channel, row.reply_ts, text);
-  else await slack.post(ev.channel, text, m.thread_ts ?? m.ts);
+
+  const now = new Date().toISOString();
+  const { error } = await db.from("entries").upsert(
+    next.map((n) => ({ ...n, channel: ev.channel, user_id: m.user, reply_ts: replyTs ?? null, deleted_at: null, updated_at: now })),
+    { onConflict: "source_key" },
+  );
+  if (error) throw error;
+  const gone = live.filter((r) => !keys.includes(r.source_key)).map((r) => r.id);
+  if (gone.length) await db.from("entries").update({ deleted_at: now }).in("id", gone);
+
+  const logged = next.map((n) => ({ amount: n.amount, note: n.note, who: who(m.user), date: n.spent_on, bill: n.bill }));
+  const text = await currentReply(logged, { corrected: true });
+  if (replyTs) await slack.update(ev.channel, replyTs, text);
+  else {
+    const ts = await slack.post(ev.channel, text, m.thread_ts ?? m.ts);
+    if (ts) await db.from("entries").update({ reply_ts: ts }).in("source_key", keys);
+  }
 }
 
 async function onDeleted(ev: { channel: string; deleted_ts: string }) {
-  const { data: row } = await db.from("entries").select("id, reply_ts, amount, note, user_id")
-    .eq("source_key", ev.deleted_ts).is("deleted_at", null).maybeSingle();
-  if (!row) return;
-  await db.from("entries").update({ deleted_at: new Date().toISOString() }).eq("id", row.id);
-  if (row.reply_ts) await slack.update(ev.channel, row.reply_ts, await removedText(Number(row.amount), row.note, row.user_id));
+  const { data } = await db.from("entries").select("id, reply_ts, amount, note, user_id")
+    .in("source_key", allKeys(ev.deleted_ts)).is("deleted_at", null);
+  const rows = data ?? [];
+  if (rows.length === 0) return;
+  await db.from("entries").update({ deleted_at: new Date().toISOString() }).in("id", rows.map((r) => r.id));
+  const amount = rows.reduce((a, r) => a + Number(r.amount), 0);
+  const note = rows.length === 1 ? rows[0].note : `${rows.length} items`;
+  const replyTs = rows.find((r) => r.reply_ts)?.reply_ts;
+  if (replyTs) await slack.update(ev.channel, replyTs, await removedText(amount, note, rows[0].user_id));
 }
 
 // ---------- /spent ----------
@@ -208,13 +238,13 @@ async function reminder() {
  */
 async function rerenderDay(day: string) {
   const { data, error } = await db.from("entries")
-    .select("id, user_id, spent_on, amount, note, bill, reply_ts, created_at")
+    .select("id, source_key, user_id, spent_on, amount, note, bill, reply_ts, created_at")
     .is("deleted_at", null).gte("spent_on", weekStart(START_DATE)).order("created_at");
   if (error) throw error;
   const rows = data ?? [];
   const asEntry = (r: typeof rows[number]): Entry => ({ date: r.spent_on, amount: Number(r.amount), bill: r.bill });
   for (const r of rows) {
-    if (!r.reply_ts || wibDate(Date.parse(r.created_at)) !== day) continue;
+    if (!r.reply_ts || r.source_key.includes("#") || wibDate(Date.parse(r.created_at)) !== day) continue; // one-line entries only
     const upTo = rows.filter((x) => x.created_at <= r.created_at).map(asEntry);
     const s = status(computeLedger(upTo, START_DATE, day));
     const text = spendReply(s, { amount: Number(r.amount), note: r.note, who: who(r.user_id), date: r.spent_on, bill: r.bill },

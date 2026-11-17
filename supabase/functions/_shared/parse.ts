@@ -105,6 +105,20 @@ export function parseSpend(raw: string, opts: ParseOptions = {}): Parsed {
   return { kind: "spend", amount, note, bill, daysBack, weekday, needsConfirm };
 }
 
+export type Spend = Extract<Parsed, { kind: "spend" }>;
+
+/**
+ * A whole Slack message. When 2 or more lines are spends, each of those lines is its own entry,
+ * with its own day name ("Indomaret senin 13rb" newline "Sarapan selasa 30rb"). Lines with no amount are left out.
+ * Otherwise the message is one entry, as before.
+ */
+export function parseMessage(raw: string, opts: ParseOptions = {}): Spend[] {
+  const lines = raw.split(/\r?\n/).map((l) => parseSpend(l, opts)).filter((p): p is Spend => p.kind === "spend");
+  if (lines.length >= 2) return lines;
+  const one = parseSpend(raw, opts);
+  return one.kind === "spend" ? [one] : [];
+}
+
 /** "1740000" -> "1.740.000" */
 export function rupiah(n: number): string {
   const s = Math.abs(Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
